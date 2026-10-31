@@ -45,6 +45,7 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_deprecated"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_dispose_assignment"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_duplicate_type_constituents"
+	"github.com/typescript-eslint/tsgolint/internal/rules/no_export_rename"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_floating_promises"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_for_in_array"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_generated_empty_object_type"
@@ -244,6 +245,7 @@ var allRules = []rule.Rule{
 	no_private_keyword.NoPrivateKeywordRule,
 	no_protected.NoProtectedRule,
 	no_single_use_const.NoSingleUseConstRule,
+	no_export_rename.NoExportRenameRule,
 	no_string_raw.NoStringRawRule,
 	no_tracked_close.NoTrackedCloseRule,
 	require_access_modifiers.RequireAccessModifiersRule,
