@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - oasis-rules
+      - main
 
 permissions:
   contents: read
