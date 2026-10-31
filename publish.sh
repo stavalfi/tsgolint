@@ -10,7 +10,8 @@ cd "$repo_root"
 # Guarded because `git am` is not idempotent.
 if [[ ! -f typescript-go/go.mod ]]; then
   echo ">> initialising typescript-go submodule"
-  git submodule update --init
+  # Only the pinned commit: the full typescript-go history makes the clone take minutes.
+  git submodule update --init --depth 1
   (cd typescript-go && git am --3way --no-gpg-sign ../patches/*.patch)
   mkdir -p internal/collections
   find ./typescript-go/internal/collections -type f ! -name '*_test.go' \
