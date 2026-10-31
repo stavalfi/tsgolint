@@ -29,7 +29,7 @@ npm --prefix "$stage" version "$version" --no-git-tag-version --allow-same-versi
 
 # Go cross-compiles cleanly here: tsgolint has no cgo.
 export CGO_ENABLED=0
-for target in darwin/arm64/darwin-arm64 linux/amd64/linux-x64; do
+for target in darwin/arm64/darwin-arm64; do
   IFS=/ read -r goos goarch npm_platform <<<"$target"
   echo ">> building tsgolint for ${npm_platform}"
   GOOS="$goos" GOARCH="$goarch" go build \
