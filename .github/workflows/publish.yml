@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   publish:
+    # A manual run can target any branch; only main publishes.
+    if: github.ref == 'refs/heads/main'
     # tsgolint has no cgo, so one Linux runner cross-compiles every platform.
     runs-on: ubuntu-latest
     steps:
