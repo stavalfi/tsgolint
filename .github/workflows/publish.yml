@@ -13,9 +13,10 @@ permissions:
   contents: read
   id-token: write
 
+# A newer push supersedes an unfinished publish: cancel it and publish the new commit.
 concurrency:
   group: publish
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
