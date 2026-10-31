@@ -91,8 +91,7 @@ var RequireFsUtf8Rule = rule.Rule{
 					return
 				}
 
-				t := ctx.TypeChecker.GetTypeAtLocation(call.Expression)
-				if !utils.ValueMatchesSomeSpecifier(call.Expression, fsSpecifiers, ctx.Program, t) {
+				if !utils.ValueMatchesSomeSpecifier(call.Expression, fsSpecifiers, ctx.Program, ctx.TypeChecker) {
 					return
 				}
 
