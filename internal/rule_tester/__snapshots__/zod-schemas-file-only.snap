@@ -28,49 +28,49 @@ Help: Move it to the package's zod-schemas.ts and import it, so every schema in 
 ---
 
 [TestZodSchemasFileOnlyClassFields/invalid-0 - 1]
-Diagnostic 1: schemaOutsideSchemasFile (5:20 - 5:26)
+Diagnostic 1: schemaOutsideSchemasFile (2:20 - 2:26)
 Message: Zod schema '#schema' is declared outside zod-schemas.ts.
 Help: Move it to the package's zod-schemas.ts and import it, so every schema in a package has one home.
-   4 | declare const z: { object(): ZodObject; compile<T>(schema: T): T };
-   5 | class A { readonly #schema: ZodType = z.compile(z.object()); static FOO = z.object(); }
+   1 | import { z, type ZodType } from "zod";
+   2 | class A { readonly #schema = z.compile(z.object()); static FOO = z.object(); }
      |                    ~~~~~~~
-   6 | export const a = new A();
+   3 | export const a = new A();
 
-Diagnostic 2: schemaOutsideSchemasFile (5:69 - 5:71)
+Diagnostic 2: schemaOutsideSchemasFile (2:60 - 2:62)
 Message: Zod schema 'FOO' is declared outside zod-schemas.ts.
 Help: Move it to the package's zod-schemas.ts and import it, so every schema in a package has one home.
-   4 | declare const z: { object(): ZodObject; compile<T>(schema: T): T };
-   5 | class A { readonly #schema: ZodType = z.compile(z.object()); static FOO = z.object(); }
-     |                                                                     ~~~
-   6 | export const a = new A();
+   1 | import { z, type ZodType } from "zod";
+   2 | class A { readonly #schema = z.compile(z.object()); static FOO = z.object(); }
+     |                                                            ~~~
+   3 | export const a = new A();
 ---
 
 [TestZodSchemasFileOnlyClassFields/invalid-1 - 1]
-Diagnostic 1: schemaOutsideSchemasFile (9:10 - 9:16)
+Diagnostic 1: schemaOutsideSchemasFile (5:10 - 5:16)
 Message: Zod schema '#schema' is declared outside zod-schemas.ts.
 Help: Move it to the package's zod-schemas.ts and import it, so every schema in a package has one home.
-   8 |   constructor() {
-   9 |     this.#schema = z.compile(z.object());
+   4 |   constructor() {
+   5 |     this.#schema = z.compile(z.object());
      |          ~~~~~~~
-  10 |   }
+   6 |   }
 ---
 
 [TestZodSchemasFileOnlyClassFields/invalid-2 - 1]
-Diagnostic 1: schemaOutsideSchemasFile (9:10 - 9:14)
-Message: Zod schema 'field' is declared outside zod-schemas.ts.
+Diagnostic 1: schemaOutsideSchemasFile (5:10 - 5:16)
+Message: Zod schema '#schema' is declared outside zod-schemas.ts.
 Help: Move it to the package's zod-schemas.ts and import it, so every schema in a package has one home.
-   8 |   init(): void {
-   9 |     this.field = z.object();
-     |          ~~~~~
-  10 |   }
+   4 |   constructor(cursorSchema: ZodType) {
+   5 |     this.#schema = cursorSchema.optional();
+     |          ~~~~~~~
+   6 |   }
 ---
 
 [TestZodSchemasFileOnlyClassFields/invalid-3 - 1]
-Diagnostic 1: schemaOutsideSchemasFile (7:12 - 7:18)
-Message: Zod schema '#schema' is declared outside zod-schemas.ts.
+Diagnostic 1: schemaOutsideSchemasFile (5:10 - 5:14)
+Message: Zod schema 'field' is declared outside zod-schemas.ts.
 Help: Move it to the package's zod-schemas.ts and import it, so every schema in a package has one home.
-   6 | class G {
-   7 |   readonly #schema: ZodType;
-     |            ~~~~~~~
-   8 |   constructor() {
+   4 |   init(): void {
+   5 |     this.field = z.object();
+     |          ~~~~~
+   6 |   }
 ---

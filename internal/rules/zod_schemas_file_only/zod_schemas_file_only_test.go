@@ -86,40 +86,54 @@ func TestPackageDirOfSubPackageDirs(t *testing.T) {
 	}
 }
 
-// zod.compile returns the schema it is given, so the field's type is still Zod.
-const classStub = `
-declare class ZodType {}
-declare class ZodObject extends ZodType {}
-declare const z: { object(): ZodObject; compile<T>(schema: T): T };
+// A stand-in "zod" module: the class-field half keys off calls rooted at the
+// zod import, so the schemas must come from a real import, not a global.
+const zodModule = `
+declare module "zod" {
+  export class ZodType { optional(): ZodType }
+  export class ZodObject extends ZodType {}
+  export const z: { object(): ZodObject; compile<T>(schema: T): T };
+}
 `
 
-// Every file name the class-field cases compile under. The fixtures tsconfig
-// globs the directory and the base VFS is cached across cases, so each case
-// declares the other's name too.
-var classFieldFileNames = []string{"file.ts", "zod-schemas.ts"}
+// The package's zod-schemas.ts, holding a builder the classes may call.
+const schemasModule = `import { z, type ZodType } from "zod";
+export class ZodSchemas {
+  static checkpoint({ cursorSchema }: { cursorSchema: ZodType }): ZodType {
+    return z.compile(z.object()).optional() ?? cursorSchema;
+  }
+}
+`
 
+// Every file the class-field cases compile with. The fixtures tsconfig globs the
+// directory and the base VFS is cached across cases, so each case declares all
+// of them, whichever one it lints.
 func otherFiles(fileName string) map[string]string {
-	files := map[string]string{}
-	for _, other := range classFieldFileNames {
-		if other != fileName {
-			files[other] = "export {};"
-		}
+	files := map[string]string{
+		"zod-stub.d.ts":  zodModule,
+		"file.ts":        "export {};",
+		"zod-schemas.ts": schemasModule,
 	}
+	delete(files, fileName)
 	return files
 }
 
-const fieldsInitialised = `class A { readonly #schema: ZodType = z.compile(z.object()); static FOO = z.object(); }
-export const a = new A();`
+const zodImport = `import { z, type ZodType } from "zod";
+`
 
-const fieldAssignedInConstructor = `
-class B {
-  readonly #schema: unknown;
+const fieldsInitialised = `class A { readonly #schema = z.compile(z.object()); static FOO = z.object(); }
+export const a = new A();
+`
+
+const compiledInConstructor = `class B {
+  readonly #schema: ZodType;
   constructor() {
     this.#schema = z.compile(z.object());
   }
-  get schema(): unknown { return this.#schema; }
+  get schema(): ZodType { return this.#schema; }
 }
-export const b = new B();`
+export const b = new B();
+`
 
 func TestZodSchemasFileOnlyClassFields(t *testing.T) {
 	t.Parallel()
@@ -139,40 +153,85 @@ export const d = new D();`,
 		{
 			FileName: "file.ts",
 			Files:    otherFiles("file.ts"),
-			Code: classStub + `
+			Code: zodImport + `
 declare class E { schema: ZodType }
 class F { declare schema: ZodType }
 export const f = new F();`,
 		},
+		// Holding a schema passed in builds nothing here; the field declaration
+		// with no initialiser is not reported by itself.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: zodImport + `class P {
+  readonly #schema: ZodType;
+  constructor(checkpointSchema: ZodType) {
+    this.#schema = checkpointSchema;
+  }
+  get schema(): ZodType { return this.#schema; }
+}
+export const p = new P(z.object());`,
+		},
+		// The fix the rule asks for: the builder lives in zod-schemas.ts.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: `import type { ZodType } from "zod";
+import { ZodSchemas } from "./zod-schemas";
+class Q {
+  readonly #schema: ZodType;
+  readonly #other = ZodSchemas.checkpoint({ cursorSchema: ZodSchemas.checkpoint({ cursorSchema: undefined! }) });
+  constructor(cursorSchema: ZodType) {
+    this.#schema = ZodSchemas.checkpoint({ cursorSchema });
+  }
+  get schema(): ZodType { return this.#schema ?? this.#other; }
+}
+export const q = new Q(undefined!);`,
+		},
 		{
 			FileName: "zod-schemas.ts",
 			Files:    otherFiles("zod-schemas.ts"),
-			Code:     classStub + fieldsInitialised + fieldAssignedInConstructor,
+			Code:     zodImport + fieldsInitialised + compiledInConstructor,
 		},
 	}, []rule_tester.InvalidTestCase{
 		{
 			FileName: "file.ts",
 			Files:    otherFiles("file.ts"),
-			Code:     classStub + fieldsInitialised,
+			Code:     zodImport + fieldsInitialised,
 			Errors: []rule_tester.InvalidTestCaseError{
-				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 20, EndLine: 5, EndColumn: 27},
-				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 69, EndLine: 5, EndColumn: 72},
+				{MessageId: "schemaOutsideSchemasFile", Line: 2, Column: 20, EndLine: 2, EndColumn: 27},
+				{MessageId: "schemaOutsideSchemasFile", Line: 2, Column: 60, EndLine: 2, EndColumn: 63},
 			},
 		},
-		// The field is typed loosely, so the assignment is where the schema is built.
+		// The field is declared bare, so the assignment is where the schema is built.
 		{
 			FileName: "file.ts",
 			Files:    otherFiles("file.ts"),
-			Code:     classStub + fieldAssignedInConstructor,
+			Code:     zodImport + compiledInConstructor,
 			Errors: []rule_tester.InvalidTestCaseError{
-				{MessageId: "schemaOutsideSchemasFile", Line: 9, Column: 10, EndLine: 9, EndColumn: 17},
+				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 10, EndLine: 5, EndColumn: 17},
+			},
+		},
+		// A method on a schema builds a new one.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: zodImport + `class O {
+  readonly #schema: ZodType;
+  constructor(cursorSchema: ZodType) {
+    this.#schema = cursorSchema.optional();
+  }
+  get schema(): ZodType { return this.#schema; }
+}
+export const o = new O(z.object());`,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 10, EndLine: 5, EndColumn: 17},
 			},
 		},
 		{
 			FileName: "file.ts",
 			Files:    otherFiles("file.ts"),
-			Code: classStub + `
-class C {
+			Code: zodImport + `class C {
   field: unknown;
   init(): void {
     this.field = z.object();
@@ -180,25 +239,7 @@ class C {
 }
 export const c = new C();`,
 			Errors: []rule_tester.InvalidTestCaseError{
-				{MessageId: "schemaOutsideSchemasFile", Line: 9, Column: 10, EndLine: 9, EndColumn: 15},
-			},
-		},
-		// A field typed as a schema is reported once, on its declaration — not
-		// again where the constructor assigns it.
-		{
-			FileName: "file.ts",
-			Files:    otherFiles("file.ts"),
-			Code: classStub + `
-class G {
-  readonly #schema: ZodType;
-  constructor() {
-    this.#schema = z.compile(z.object());
-  }
-  get schema(): ZodType { return this.#schema; }
-}
-export const g = new G();`,
-			Errors: []rule_tester.InvalidTestCaseError{
-				{MessageId: "schemaOutsideSchemasFile", Line: 7, Column: 12, EndLine: 7, EndColumn: 19},
+				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 10, EndLine: 5, EndColumn: 15},
 			},
 		},
 	})

@@ -2,6 +2,7 @@ package zod_schemas_file_only
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -96,9 +97,95 @@ func isZodSchemaType(typeChecker *checker.Checker, node *ast.Node) bool {
 	})
 }
 
-// A class field reported where it is declared: `#schema: ZodString` or
-// `static FOO = z.object()`. `declare schema: ZodString` — or any field of a
-// `declare class` — describes a schema that lives elsewhere, so it is not one.
+// The module an identifier was imported from, or "" when it is not an import
+// binding.
+func importedFrom(typeChecker *checker.Checker, identifier *ast.Node) string {
+	symbol := typeChecker.GetSymbolAtLocation(identifier)
+	if symbol == nil || symbol.Flags&ast.SymbolFlagsAlias == 0 {
+		return ""
+	}
+	for _, declaration := range symbol.Declarations {
+		for node := declaration; node != nil; node = node.Parent {
+			if !ast.IsImportDeclaration(node) {
+				continue
+			}
+			if specifier := node.AsImportDeclaration().ModuleSpecifier; ast.IsStringLiteral(specifier) {
+				return specifier.Text()
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+func isZodModule(specifier string) bool {
+	return specifier == "zod" || strings.HasPrefix(specifier, "zod/")
+}
+
+// `./zod-schemas`, `../zod-schemas.ts`, `#/zod-schemas.js`: a builder that lives
+// where schemas belong.
+func isSchemasModule(specifier string) bool {
+	base := path.Base(specifier)
+	return strings.TrimSuffix(strings.TrimSuffix(base, ".ts"), ".js") == strings.TrimSuffix(schemasFileName, ".ts")
+}
+
+// Walks a call/property chain back to the identifier it started from:
+// `z.compile(z.object())` roots at `z`, `ZodSchemas.foo(...)` at `ZodSchemas`.
+func rootIdentifier(node *ast.Node) *ast.Node {
+	current := node
+	for {
+		switch {
+		case ast.IsCallExpression(current):
+			current = current.AsCallExpression().Expression
+		case ast.IsPropertyAccessExpression(current):
+			current = current.AsPropertyAccessExpression().Expression
+		case ast.IsParenthesizedExpression(current):
+			current = current.AsParenthesizedExpression().Expression
+		case ast.IsIdentifier(current):
+			return current
+		default:
+			return nil
+		}
+	}
+}
+
+// A call that builds a schema in this file: a chain rooted at the zod import
+// (`z.object(...)`, `z.compile(...)`), or a method on a schema
+// (`cursorSchema.optional()`). Calling a builder imported from a zod-schemas.ts
+// only references a schema built there.
+func buildsSchema(typeChecker *checker.Checker, call *ast.Node) bool {
+	callee := call.AsCallExpression().Expression
+	if root := rootIdentifier(callee); root != nil && isZodModule(importedFrom(typeChecker, root)) {
+		return true
+	}
+	if !ast.IsPropertyAccessExpression(callee) {
+		return false
+	}
+	receiver := callee.AsPropertyAccessExpression().Expression
+	// The builder class itself (`typeof ZodSchemas`) reads as Zod-named.
+	if ast.IsIdentifier(receiver) && isSchemasModule(importedFrom(typeChecker, receiver)) {
+		return false
+	}
+	return isZodSchemaType(typeChecker, receiver)
+}
+
+// Whether the expression constructs a schema here, rather than holding one
+// passed in (`this.#schema = checkpointSchema`) or built in a zod-schemas.ts.
+func constructsSchema(typeChecker *checker.Checker, expression *ast.Node) bool {
+	var visit func(node *ast.Node) bool
+	visit = func(node *ast.Node) bool {
+		if ast.IsCallExpression(node) && buildsSchema(typeChecker, node) {
+			return true
+		}
+		return node.ForEachChild(visit)
+	}
+	return visit(expression)
+}
+
+// A class field reported where it is declared: `static FOO = z.object()`. A
+// field with no initialiser is decided by the assignments to it.
+// `declare schema: ZodString` — or any field of a `declare class` — describes a
+// schema that lives elsewhere, so it is not one.
 func isReportedPropertyDeclaration(typeChecker *checker.Checker, node *ast.Node) bool {
 	if !ast.IsPropertyDeclaration(node) {
 		return false
@@ -109,8 +196,12 @@ func isReportedPropertyDeclaration(typeChecker *checker.Checker, node *ast.Node)
 	if filepath.Base(ast.GetSourceFileOfNode(node).FileName()) == schemasFileName {
 		return false
 	}
-	name := node.AsPropertyDeclaration().Name()
+	declaration := node.AsPropertyDeclaration()
+	name := declaration.Name()
 	if name == nil || !(ast.IsIdentifier(name) || ast.IsPrivateIdentifier(name)) {
+		return false
+	}
+	if declaration.Initializer == nil || !constructsSchema(typeChecker, declaration.Initializer) {
 		return false
 	}
 	return isZodSchemaType(typeChecker, name)
@@ -155,7 +246,7 @@ var ZodSchemasFileOnlyRule = rule.Rule{
 			}
 
 			// `this.#schema = z.compile(...)` in a constructor or method builds the
-			// schema here even when the field is typed loosely (or not declared).
+			// schema here. `this.#schema = checkpointSchema` only holds one.
 			listeners[ast.KindBinaryExpression] = func(node *ast.Node) {
 				if !ast.IsAssignmentExpression(node, true) {
 					return
@@ -169,7 +260,7 @@ var ZodSchemasFileOnlyRule = rule.Rule{
 					return
 				}
 				name := access.Name()
-				if !isZodSchemaType(ctx.TypeChecker, binary.Right) {
+				if !isZodSchemaType(ctx.TypeChecker, binary.Right) || !constructsSchema(ctx.TypeChecker, binary.Right) {
 					return
 				}
 				// The field's declaration already carries the report.
