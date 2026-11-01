@@ -85,3 +85,121 @@ func TestPackageDirOfSubPackageDirs(t *testing.T) {
 		}
 	}
 }
+
+// zod.compile returns the schema it is given, so the field's type is still Zod.
+const classStub = `
+declare class ZodType {}
+declare class ZodObject extends ZodType {}
+declare const z: { object(): ZodObject; compile<T>(schema: T): T };
+`
+
+// Every file name the class-field cases compile under. The fixtures tsconfig
+// globs the directory and the base VFS is cached across cases, so each case
+// declares the other's name too.
+var classFieldFileNames = []string{"file.ts", "zod-schemas.ts"}
+
+func otherFiles(fileName string) map[string]string {
+	files := map[string]string{}
+	for _, other := range classFieldFileNames {
+		if other != fileName {
+			files[other] = "export {};"
+		}
+	}
+	return files
+}
+
+const fieldsInitialised = `class A { readonly #schema: ZodType = z.compile(z.object()); static FOO = z.object(); }
+export const a = new A();`
+
+const fieldAssignedInConstructor = `
+class B {
+  readonly #schema: unknown;
+  constructor() {
+    this.#schema = z.compile(z.object());
+  }
+  get schema(): unknown { return this.#schema; }
+}
+export const b = new B();`
+
+func TestZodSchemasFileOnlyClassFields(t *testing.T) {
+	t.Parallel()
+	rule_tester.RunRuleTester(fixtures.GetRootDir(), "tsconfig.json", t, &ZodSchemasFileOnlyRule, []rule_tester.ValidTestCase{
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: `
+class D {
+  readonly port: number = 8080;
+  name = "x";
+  constructor() { this.name = "y"; }
+}
+export const d = new D();`,
+		},
+		// `declare` fields describe a schema that lives elsewhere.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: classStub + `
+declare class E { schema: ZodType }
+class F { declare schema: ZodType }
+export const f = new F();`,
+		},
+		{
+			FileName: "zod-schemas.ts",
+			Files:    otherFiles("zod-schemas.ts"),
+			Code:     classStub + fieldsInitialised + fieldAssignedInConstructor,
+		},
+	}, []rule_tester.InvalidTestCase{
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code:     classStub + fieldsInitialised,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 20, EndLine: 5, EndColumn: 27},
+				{MessageId: "schemaOutsideSchemasFile", Line: 5, Column: 69, EndLine: 5, EndColumn: 72},
+			},
+		},
+		// The field is typed loosely, so the assignment is where the schema is built.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code:     classStub + fieldAssignedInConstructor,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "schemaOutsideSchemasFile", Line: 9, Column: 10, EndLine: 9, EndColumn: 17},
+			},
+		},
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: classStub + `
+class C {
+  field: unknown;
+  init(): void {
+    this.field = z.object();
+  }
+}
+export const c = new C();`,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "schemaOutsideSchemasFile", Line: 9, Column: 10, EndLine: 9, EndColumn: 15},
+			},
+		},
+		// A field typed as a schema is reported once, on its declaration — not
+		// again where the constructor assigns it.
+		{
+			FileName: "file.ts",
+			Files:    otherFiles("file.ts"),
+			Code: classStub + `
+class G {
+  readonly #schema: ZodType;
+  constructor() {
+    this.#schema = z.compile(z.object());
+  }
+  get schema(): ZodType { return this.#schema; }
+}
+export const g = new G();`,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "schemaOutsideSchemasFile", Line: 7, Column: 12, EndLine: 7, EndColumn: 19},
+			},
+		},
+	})
+}

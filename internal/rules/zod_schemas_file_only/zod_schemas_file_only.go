@@ -96,6 +96,26 @@ func isZodSchemaType(typeChecker *checker.Checker, node *ast.Node) bool {
 	})
 }
 
+// A class field reported where it is declared: `#schema: ZodString` or
+// `static FOO = z.object()`. `declare schema: ZodString` — or any field of a
+// `declare class` — describes a schema that lives elsewhere, so it is not one.
+func isReportedPropertyDeclaration(typeChecker *checker.Checker, node *ast.Node) bool {
+	if !ast.IsPropertyDeclaration(node) {
+		return false
+	}
+	if node.Flags&ast.NodeFlagsAmbient != 0 || ast.HasSyntacticModifier(node, ast.ModifierFlagsAmbient) {
+		return false
+	}
+	if filepath.Base(ast.GetSourceFileOfNode(node).FileName()) == schemasFileName {
+		return false
+	}
+	name := node.AsPropertyDeclaration().Name()
+	if name == nil || !(ast.IsIdentifier(name) || ast.IsPrivateIdentifier(name)) {
+		return false
+	}
+	return isZodSchemaType(typeChecker, name)
+}
+
 var ZodSchemasFileOnlyRule = rule.Rule{
 	Name: "zod-schemas-file-only",
 	Run: func(ctx rule.RuleContext, options any) rule.RuleListeners {
@@ -122,6 +142,43 @@ var ZodSchemasFileOnlyRule = rule.Rule{
 				// a helper or a function call is still a schema living here.
 				if !isZodSchemaType(ctx.TypeChecker, name) {
 					return
+				}
+				ctx.ReportNode(name, buildWrongFileMessage(name.Text()))
+			}
+
+			listeners[ast.KindPropertyDeclaration] = func(node *ast.Node) {
+				if !isReportedPropertyDeclaration(ctx.TypeChecker, node) {
+					return
+				}
+				name := node.AsPropertyDeclaration().Name()
+				ctx.ReportNode(name, buildWrongFileMessage(name.Text()))
+			}
+
+			// `this.#schema = z.compile(...)` in a constructor or method builds the
+			// schema here even when the field is typed loosely (or not declared).
+			listeners[ast.KindBinaryExpression] = func(node *ast.Node) {
+				if !ast.IsAssignmentExpression(node, true) {
+					return
+				}
+				binary := node.AsBinaryExpression()
+				if !ast.IsPropertyAccessExpression(binary.Left) {
+					return
+				}
+				access := binary.Left.AsPropertyAccessExpression()
+				if access.Expression.Kind != ast.KindThisKeyword {
+					return
+				}
+				name := access.Name()
+				if !isZodSchemaType(ctx.TypeChecker, binary.Right) {
+					return
+				}
+				// The field's declaration already carries the report.
+				if symbol := ctx.TypeChecker.GetSymbolAtLocation(name); symbol != nil {
+					for _, declaration := range symbol.Declarations {
+						if isReportedPropertyDeclaration(ctx.TypeChecker, declaration) {
+							return
+						}
+					}
 				}
 				ctx.ReportNode(name, buildWrongFileMessage(name.Text()))
 			}
