@@ -1,0 +1,96 @@
+
+[TestLinkSignalFirstStatement/invalid-0 - 1]
+Diagnostic 1: linkSignalFirst (10:9 - 10:11)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: callerSignal });` and use `signal` below it.
+   9 | class A extends Base {
+  10 |   async run({ signal }: { signal: AbortSignal }): Promise<void> {
+     |         ~~~
+  11 |     await fetch("x", { signal });
+---
+
+[TestLinkSignalFirstStatement/invalid-1 - 1]
+Diagnostic 1: linkSignalFirst (10:9 - 10:11)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: callerSignal });` and use `signal` below it.
+   9 | class A extends Base {
+  10 |   async run({ signal }: { signal: AbortSignal }): Promise<void> {
+     |         ~~~
+  11 |     await fetch("x", { signal: super.linkSignal({ signal }) });
+
+Diagnostic 2: linkSignalTwice (11:32 - 11:59)
+Message: The caller's signal is linked by the first statement already; linking it again wraps it twice.
+Help: Use `signal` instead.
+  10 |   async run({ signal }: { signal: AbortSignal }): Promise<void> {
+  11 |     await fetch("x", { signal: super.linkSignal({ signal }) });
+     |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  12 |   }
+---
+
+[TestLinkSignalFirstStatement/invalid-2 - 1]
+Diagnostic 1: linkSignalFirst (11:5 - 11:51)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: callerSignal });` and use `signal` below it.
+  10 |   async run({ signal }: { signal: AbortSignal }): Promise<void> {
+  11 |     const anySignal = super.linkSignal({ signal });
+     |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  12 |     await fetch("x", { signal: anySignal });
+---
+
+[TestLinkSignalFirstStatement/invalid-3 - 1]
+Diagnostic 1: linkSignalFirst (12:5 - 12:64)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: options.signal });` and use `signal` below it.
+  11 |     const url = "x";
+  12 |     const signal = super.linkSignal({ signal: options.signal });
+     |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  13 |     await fetch(url, { signal });
+---
+
+[TestLinkSignalFirstStatement/invalid-4 - 1]
+Diagnostic 1: linkSignalFirst (12:5 - 12:55)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: abort });` and use `signal` below it.
+  11 |   async run({ signal: abort }: { signal: AbortSignal }): Promise<void> {
+  12 |     const linked = super.linkSignal({ signal: abort });
+     |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  13 |     await use({ linked });
+---
+
+[TestLinkSignalFirstStatement/invalid-5 - 1]
+Diagnostic 1: linkSignalFirst (10:9 - 10:12)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: options.signal });` and use `signal` below it.
+   9 | class A extends Base {
+  10 |   async #run(options: { signal: AbortSignal }): Promise<void> {
+     |         ~~~~
+  11 |     await fetch("x", { signal: options.signal });
+---
+
+[TestLinkSignalFirstStatement/invalid-6 - 1]
+Diagnostic 1: linkSignalFirst (11:9 - 11:11)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: callerSignal });` and use `signal` below it.
+  10 | class A extends Base {
+  11 |   async run({ signal: callerSignal }: { signal: AbortSignal }): Promise<void> {
+     |         ~~~
+  12 |     const signal = make();
+---
+
+[TestLinkSignalFirstStatement/invalid-7 - 1]
+Diagnostic 1: linkSignalTwice (12:32 - 12:73)
+Message: The caller's signal is linked by the first statement already; linking it again wraps it twice.
+Help: Use `signal` instead.
+  11 |     const signal = super.linkSignal({ signal: callerSignal });
+  12 |     await fetch("x", { signal: super.linkSignal({ signal: callerSignal }) });
+     |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  13 |     await fetch("y", { signal: super.linkSignal({ signal }) });
+
+Diagnostic 2: linkSignalTwice (13:32 - 13:59)
+Message: The caller's signal is linked by the first statement already; linking it again wraps it twice.
+Help: Use `signal` instead.
+  12 |     await fetch("x", { signal: super.linkSignal({ signal: callerSignal }) });
+  13 |     await fetch("y", { signal: super.linkSignal({ signal }) });
+     |                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  14 |   }
+---

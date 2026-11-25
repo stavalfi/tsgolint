@@ -27,6 +27,7 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_return"
 	"github.com/typescript-eslint/tsgolint/internal/rules/consistent_type_exports"
 	"github.com/typescript-eslint/tsgolint/internal/rules/dot_notation"
+	"github.com/typescript-eslint/tsgolint/internal/rules/link_signal_first_statement"
 	"github.com/typescript-eslint/tsgolint/internal/rules/logger_name_matches_class"
 	"github.com/typescript-eslint/tsgolint/internal/rules/new_only_in_constructor"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_anonymous_functions"
@@ -224,6 +225,7 @@ func setupProfiling(opts *headlessOptions) (func(), error) {
 var allRules = []rule.Rule{
 	async_dispose_last.AsyncDisposeLastRule,
 	class_name_matches_filename.ClassNameMatchesFilenameRule,
+	link_signal_first_statement.LinkSignalFirstStatementRule,
 	logger_name_matches_class.LoggerNameMatchesClassRule,
 	no_anonymous_functions.NoAnonymousFunctionsRule,
 	new_only_in_constructor.NewOnlyInConstructorRule,

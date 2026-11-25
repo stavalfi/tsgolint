@@ -1,70 +1,88 @@
 
 [TestRequireLinkSignal/invalid-0 - 1]
-Diagnostic 1: requireLinkSignal (9:66 - 9:71)
+Diagnostic 1: requireLinkSignal (10:65 - 10:70)
 Message: `signal` is the caller's signal only — it ignores this instance being closed.
 Help: Use `super.linkSignal({ signal: signal })` instead.
-   8 | class A extends Base {
-   9 |   run({ signal }: { signal: AbortSignal }) { return fetch("x", { signal }); }
-     |                                                                  ~~~~~~
-  10 | }
+   9 | class A extends Base {
+  10 |   run({ signal }: { signal: AbortSignal }): void { fetch("x", { signal }); }
+     |                                                                 ~~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-1 - 1]
-Diagnostic 1: requireLinkSignal (9:83 - 9:89)
+Diagnostic 1: requireLinkSignal (10:82 - 10:88)
 Message: `renamed` is the caller's signal only — it ignores this instance being closed.
 Help: Use `super.linkSignal({ signal: renamed })` instead.
-   8 | class A extends Base {
-   9 |   run({ signal: renamed }: { signal: AbortSignal }) { return fetch("x", { signal: renamed }); }
-     |                                                                                   ~~~~~~~
-  10 | }
+   9 | class A extends Base {
+  10 |   run({ signal: renamed }: { signal: AbortSignal }): void { fetch("x", { signal: renamed }); }
+     |                                                                                  ~~~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-2 - 1]
-Diagnostic 1: requireLinkSignal (9:43 - 9:47)
+Diagnostic 1: requireLinkSignal (10:49 - 10:53)
 Message: `abort` is the caller's signal only — it ignores this instance being closed.
 Help: Use `super.linkSignal({ signal: abort })` instead.
-   8 | class A extends Base {
-   9 |   run(abort: AbortSignal) { const alias = abort; return fetch("x", { signal: alias }); }
-     |                                           ~~~~~
-  10 | }
+   9 | class A extends Base {
+  10 |   run(abort: AbortSignal): void { const alias = abort; fetch("x", { signal: alias }); }
+     |                                                 ~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-3 - 1]
-Diagnostic 1: requireLinkSignal (9:71 - 9:84)
+Diagnostic 1: requireLinkSignal (10:70 - 10:83)
 Message: `options.signal` is the caller's signal only — it ignores this instance being closed.
 Help: Use `super.linkSignal({ signal: options.signal })` instead.
-   8 | class A extends Base {
-   9 |   run(options: { signal: AbortSignal }) { return fetch("x", { signal: options.signal }); }
-     |                                                                       ~~~~~~~~~~~~~~
-  10 | }
+   9 | class A extends Base {
+  10 |   run(options: { signal: AbortSignal }): void { fetch("x", { signal: options.signal }); }
+     |                                                                      ~~~~~~~~~~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-4 - 1]
-Diagnostic 1: requireLinkSignal (9:78 - 9:82)
+Diagnostic 1: requireLinkSignal (10:75 - 10:79)
 Message: `abort` is the caller's signal only — it ignores this instance being closed.
 Help: Use `super.linkSignal({ signal: abort })` instead.
-   8 | class A extends Base {
-   9 |   run(abort: AbortSignal) { return function () { return fetch("x", { signal: abort }); }; }
-     |                                                                              ~~~~~
-  10 | }
+   9 | class A extends Base {
+  10 |   run(abort: AbortSignal): void { function inner() { fetch("x", { signal: abort }); } inner(); }
+     |                                                                           ~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-5 - 1]
-Diagnostic 1: noLinkSignalInPrivate (9:82 - 9:109)
-Message: A private method already gets a linked signal from the public method that calls it.
-Help: Pass the signal through as-is instead of calling `super.linkSignal` again.
-   8 | class A extends Base {
-   9 |   private run({ signal }: { signal: AbortSignal }) { return fetch("x", { signal: super.linkSignal({ signal }) }); }
-     |                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  10 | }
+Diagnostic 1: requireLinkSignal (10:66 - 10:71)
+Message: `signal` is the caller's signal only — it ignores this instance being closed.
+Help: Use `super.linkSignal({ signal: signal })` instead.
+   9 | class A extends Base {
+  10 |   #run({ signal }: { signal: AbortSignal }): void { fetch("x", { signal }); }
+     |                                                                  ~~~~~~
+  11 | }
 ---
 
 [TestRequireLinkSignal/invalid-6 - 1]
-Diagnostic 1: noLinkSignalInPrivate (9:59 - 9:102)
-Message: A private method already gets a linked signal from the public method that calls it.
-Help: Pass the signal through as-is instead of calling `super.linkSignal` again.
-   8 | class A extends Base {
-   9 |   #run(options: { signal: AbortSignal }) { const linked = super.linkSignal({ signal: options.signal }); return fetch("x", { signal: linked }); }
-     |                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  10 | }
+Diagnostic 1: requireLinkSignal (13:32 - 13:43)
+Message: `callerSignal` is the caller's signal only — it ignores this instance being closed.
+Help: Use `super.linkSignal({ signal: callerSignal })` instead.
+  12 |     const signal = super.linkSignal({ signal: callerSignal });
+  13 |     await fetch("x", { signal: callerSignal });
+     |                                ~~~~~~~~~~~~
+  14 |     await use({ callerSignal });
+
+Diagnostic 2: requireLinkSignal (14:17 - 14:28)
+Message: `callerSignal` is the caller's signal only — it ignores this instance being closed.
+Help: Use `super.linkSignal({ signal: callerSignal })` instead.
+  13 |     await fetch("x", { signal: callerSignal });
+  14 |     await use({ callerSignal });
+     |                 ~~~~~~~~~~~~
+  15 |   }
+---
+
+[TestRequireLinkSignal/invalid-7 - 1]
+Diagnostic 1: requireLinkSignal (11:32 - 11:45)
+Message: `options.signal` is the caller's signal only — it ignores this instance being closed.
+Help: Use `super.linkSignal({ signal: options.signal })` instead.
+  10 |   async run(options: { signal: AbortSignal }): Promise<void> {
+  11 |     await fetch("x", { signal: options.signal });
+     |                                ~~~~~~~~~~~~~~
+  12 |   }
 ---
