@@ -114,6 +114,26 @@ func TestPreferIncludesRule(t *testing.T) {
         /\s/.test(text);
       }
     `},
+		{Code: `
+      function f(body: string): void {
+        /scopeName\\?":\\?"source\./.test(body);
+      }
+    `},
+		{Code: `
+      function f(body: string): void {
+        /a\\?b/.test(body);
+      }
+    `},
+		{Code: `
+      function f(body: string): void {
+        /a\\+/.test(body);
+      }
+    `},
+		{Code: `
+      function f(body: string): void {
+        /a\\\d/.test(body);
+      }
+    `},
 	}, []rule_tester.InvalidTestCase{
 		{
 			Code: `
@@ -273,14 +293,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a?.indexOf(b) === -1;
         }
       `,
-			Output: []string{`
-        function f(a?: string): void {
-          !a?.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        function f(a?: string): void {
+          !a?.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -290,14 +315,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a?.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        function f(a?: string): void {
-          a?.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        function f(a?: string): void {
+          a?.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -396,14 +426,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: any[]): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -413,14 +448,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: ReadonlyArray<any>): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -430,14 +470,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Int8Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -447,14 +492,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Int16Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -464,14 +514,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Int32Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -481,14 +536,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Uint8Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -498,14 +558,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Uint16Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -515,14 +580,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Uint32Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -532,14 +602,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f(a: Float32Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -549,14 +624,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        function f(a: Float64Array): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        function f(a: Float64Array): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -566,14 +646,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        function f<T>(a: T[] | ReadonlyArray<T>): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        function f<T>(a: T[] | ReadonlyArray<T>): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -596,7 +681,13 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         function f<
           T,
           U extends
@@ -613,10 +704,9 @@ func TestPreferIncludesRule(t *testing.T) {
         >(a: U): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -630,7 +720,13 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         type UserDefined = {
           indexOf(x: any): number;
           includes(x: any): boolean;
@@ -638,10 +734,9 @@ func TestPreferIncludesRule(t *testing.T) {
         function f(a: UserDefined): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -651,14 +746,19 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        function f(a: Readonly<any[]>): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        function f(a: Readonly<any[]>): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -671,17 +771,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f(a: any[]): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f(a: any[]): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -693,17 +798,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f(a: ReadonlyArray<any>): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f(a: ReadonlyArray<any>): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -715,17 +825,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Line:      4,
+					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         declare const b: any;
         function f(a: Int8Array): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
-					Line:      4,
-					Column:    11,
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -736,17 +851,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f(a: Uint32Array): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f(a: Uint32Array): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -757,17 +877,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f(a: Float64Array): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f(a: Float64Array): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -779,17 +904,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f<T>(a: T[] | ReadonlyArray<T>): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f<T>(a: T[] | ReadonlyArray<T>): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -805,7 +935,15 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Line:      8,
+					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
         declare const b: any;
         type UserDefined = {
           indexOf(x: any): number;
@@ -814,12 +952,9 @@ func TestPreferIncludesRule(t *testing.T) {
         function f(a: UserDefined): void {
           a.includes(b);
         }
-      `},
-			Errors: []rule_tester.InvalidTestCaseError{
-				{
-					MessageId: "preferIncludes",
-					Line:      8,
-					Column:    11,
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -831,17 +966,22 @@ func TestPreferIncludesRule(t *testing.T) {
           a.indexOf(b) !== -1;
         }
       `,
-			Output: []string{`
-        declare const b: any;
-        function f(a: Readonly<any[]>): void {
-          a.includes(b);
-        }
-      `},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{
 					MessageId: "preferIncludes",
 					Line:      4,
 					Column:    11,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        declare const b: any;
+        function f(a: Readonly<any[]>): void {
+          a.includes(b);
+        }
+      `,
+						},
+					},
 				},
 			},
 		},
@@ -874,7 +1014,7 @@ func TestPreferIncludesRule(t *testing.T) {
       `,
 			Output: []string{`
         function f(a: string): void {
-          a.includes('\0\'\\n\r\v\t\f');
+          a.includes('\u0000\'\\n\r\v\t\f');
         }
       `},
 			Errors: []rule_tester.InvalidTestCaseError{
@@ -1073,6 +1213,135 @@ func TestPreferIncludesRule(t *testing.T) {
 					Line:      3,
 					Column:    11,
 				},
+			},
+		},
+		{
+			Code: `
+        function f(a: string): void {
+          /a\\b\.c/.test(a);
+        }
+      `,
+			Output: []string{`
+        function f(a: string): void {
+          a.includes('a\\b.c');
+        }
+      `},
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferStringIncludes",
+				},
+			},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\'c/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b\'c'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\\'c/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b\\\'c'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\1/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b\u0001'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\8/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b8'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\377/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\bÿ'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\400/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b 0'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { /a\\b\08/.test(a); }`,
+			Output: []string{`function f(a: string) { a.includes('a\\b\u00008'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { const p = new RegExp('a\\\\b\n'); p.test(a); }`,
+			Output: []string{`function f(a: string) { const p = new RegExp('a\\\\b\n'); a.includes('a\\b\n'); }`},
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code:   `function f(a: string) { const p = new RegExp('a\\\\b\uD800'); p.test(a); }`,
+			Errors: []rule_tester.InvalidTestCaseError{{MessageId: "preferStringIncludes"}},
+		},
+		{
+			Code: `
+        const xs: number[] = [NaN];
+        xs.indexOf(NaN) !== -1;
+
+        const ys: (string | undefined)[] = [, 'a'];
+        ys.indexOf(undefined) !== -1;
+      `,
+			Errors: []rule_tester.InvalidTestCaseError{
+				{
+					MessageId: "preferIncludes",
+					Line:      3,
+					Column:    9,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        const xs: number[] = [NaN];
+        xs.includes(NaN);
+
+        const ys: (string | undefined)[] = [, 'a'];
+        ys.indexOf(undefined) !== -1;
+      `,
+						},
+					},
+				},
+				{
+					MessageId: "preferIncludes",
+					Line:      6,
+					Column:    9,
+					Suggestions: []rule_tester.InvalidTestCaseSuggestion{
+						{
+							MessageId: "preferIncludesSuggestion",
+							Output: `
+        const xs: number[] = [NaN];
+        xs.indexOf(NaN) !== -1;
+
+        const ys: (string | undefined)[] = [, 'a'];
+        ys.includes(undefined);
+      `,
+						},
+					},
+				},
+			},
+		},
+		{
+			Code: `
+        type Id = string & { __brand: 'Id' };
+        function f<T extends string>(a: 'foo' | 'bar', b: Id, c: T): void {
+          a.indexOf('o') !== -1;
+          b.indexOf('x') === -1;
+          c.indexOf('y') >= 0;
+        }
+      `,
+			Output: []string{`
+        type Id = string & { __brand: 'Id' };
+        function f<T extends string>(a: 'foo' | 'bar', b: Id, c: T): void {
+          a.includes('o');
+          !b.includes('x');
+          c.includes('y');
+        }
+      `},
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "preferIncludes", Line: 4, Column: 11},
+				{MessageId: "preferIncludes", Line: 5, Column: 11},
+				{MessageId: "preferIncludes", Line: 6, Column: 11},
 			},
 		},
 	})

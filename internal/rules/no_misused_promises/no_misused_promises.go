@@ -84,6 +84,22 @@ var NoMisusedPromisesRule = rule.Rule{
 			}
 		}
 
+		checksConditionals := true
+		flagUnions := ChecksConditionalsOptionsFlagUnionsNone
+		switch value := opts.ChecksConditionals.(type) {
+		case bool:
+			checksConditionals = value
+		case map[string]any:
+			jsonBytes, err := json.Marshal(value)
+			if err != nil {
+				break
+			}
+			var conditionalOpts ChecksConditionalsOptions
+			if err := json.Unmarshal(jsonBytes, &conditionalOpts); err == nil {
+				flagUnions = conditionalOpts.FlagUnions
+			}
+		}
+
 		// Handle checksVoidReturn which can be either a boolean or an object
 		checksVoidReturn := true
 		var checksVoidReturnOpts *ChecksVoidReturnOptions
@@ -304,6 +320,67 @@ var NoMisusedPromisesRule = rule.Rule{
 			return true
 		}
 
+		isSometimesThenable := func(node *ast.Node) bool {
+			t := checker.Checker_getApparentType(ctx.TypeChecker, ctx.TypeChecker.GetTypeAtLocation(node))
+			return utils.Some(utils.UnionTypeParts(t), func(t *checker.Type) bool {
+				return utils.IsThenableType(ctx.TypeChecker, node, t)
+			})
+		}
+
+		hasMatchingPromiseTypeArgument := func(node *ast.Node) bool {
+			unionConstituents := utils.UnionTypeParts(checker.Checker_getApparentType(ctx.TypeChecker, ctx.TypeChecker.GetTypeAtLocation(node)))
+			promiseTypes := map[*checker.Type]struct{}{}
+			nonPromiseUnionConstituents := make([]*checker.Type, 0, len(unionConstituents))
+			for _, t := range unionConstituents {
+				if utils.IsThenableType(ctx.TypeChecker, node, t) {
+					promiseTypes[t] = struct{}{}
+				} else {
+					nonPromiseUnionConstituents = append(nonPromiseUnionConstituents, t)
+				}
+			}
+			if len(promiseTypes) == 0 {
+				return false
+			}
+
+			awaitedTypeConstituents := []*checker.Type{}
+			for _, promiseType := range unionConstituents {
+				if _, ok := promiseTypes[promiseType]; !ok {
+					continue
+				}
+				awaitedType := checker.Checker_getAwaitedType(ctx.TypeChecker, promiseType)
+				if awaitedType == nil {
+					return false
+				}
+				awaitedTypeConstituents = append(awaitedTypeConstituents, utils.UnionTypeParts(awaitedType)...)
+			}
+
+			typeSet := func(types []*checker.Type) map[*checker.Type]struct{} {
+				set := make(map[*checker.Type]struct{}, len(types))
+				for _, t := range types {
+					set[t] = struct{}{}
+				}
+				return set
+			}
+			nonPromiseTypeSet := typeSet(nonPromiseUnionConstituents)
+			awaitedTypeSet := typeSet(awaitedTypeConstituents)
+
+			hasEquivalentType := func(t *checker.Type, candidates []*checker.Type, candidateSet map[*checker.Type]struct{}) bool {
+				if _, ok := candidateSet[t]; ok {
+					return true
+				}
+				return utils.Some(candidates, func(candidate *checker.Type) bool {
+					return checker.Checker_isTypeAssignableTo(ctx.TypeChecker, t, candidate) &&
+						checker.Checker_isTypeAssignableTo(ctx.TypeChecker, candidate, t)
+				})
+			}
+
+			return utils.Every(nonPromiseUnionConstituents, func(t *checker.Type) bool {
+				return hasEquivalentType(t, awaitedTypeConstituents, awaitedTypeSet)
+			}) && utils.Every(awaitedTypeConstituents, func(awaited *checker.Type) bool {
+				return hasEquivalentType(awaited, nonPromiseUnionConstituents, nonPromiseTypeSet)
+			})
+		}
+
 		checkedNodes := map[*ast.Node](struct{}){}
 
 		var checkConditional func(
@@ -338,7 +415,9 @@ var NoMisusedPromisesRule = rule.Rule{
 				return
 			}
 
-			if isAlwaysThenable(node) {
+			if isAlwaysThenable(node) ||
+				(flagUnions == ChecksConditionalsOptionsFlagUnionsAll && isSometimesThenable(node)) ||
+				(flagUnions == ChecksConditionalsOptionsFlagUnionsStrict && hasMatchingPromiseTypeArgument(node)) {
 				reportNode(node, buildConditionalMessage(), nil)
 			}
 		}
@@ -360,12 +439,27 @@ var NoMisusedPromisesRule = rule.Rule{
 			return checker.Checker_getPropertyOfType(ctx.TypeChecker, t, memberName)
 		}
 
+		// Synthesizing signatures for a union constraint can cause exponential intersections of callback parameters.
+		var visitFunctionTypeParts func(*checker.Type, func(*checker.Type) bool) bool
+		visitFunctionTypeParts = func(t *checker.Type, visit func(*checker.Type) bool) bool {
+			t = checker.Checker_getReducedApparentType(ctx.TypeChecker, t)
+			if utils.IsUnionType(t) {
+				for _, part := range t.Types() {
+					if !visitFunctionTypeParts(part, visit) {
+						return false
+					}
+				}
+				return true
+			}
+			return visit(t)
+		}
+
 		isVoidReturningFunctionType := func(
 			node *ast.Node,
 			t *checker.Type,
 		) bool {
 			hadVoidReturn := false
-			if !utils.VisitUnionTypeParts(t, func(part *checker.Type) bool {
+			if !visitFunctionTypeParts(t, func(part *checker.Type) bool {
 				for _, sig := range utils.GetCallSignatures(ctx.TypeChecker, part) {
 					returnType := checker.Checker_getReturnTypeOfSignature(ctx.TypeChecker, sig)
 					// If a certain positional argument accepts both thenable and void returns,
@@ -452,8 +546,8 @@ var NoMisusedPromisesRule = rule.Rule{
 			node *ast.Node,
 			t *checker.Type,
 		) bool {
-			return utils.SomeUnionTypePart(t, func(t *checker.Type) bool {
-				return anySignatureIsThenableType(node, t)
+			return !visitFunctionTypeParts(t, func(t *checker.Type) bool {
+				return !anySignatureIsThenableType(node, t)
 			})
 		}
 
@@ -516,9 +610,7 @@ var NoMisusedPromisesRule = rule.Rule{
 		voidFunctionArguments := func(
 			node *ast.Expression,
 		) ([]int, map[int]*voidExpectation) {
-			// 'new' can be used without any arguments, as in 'let b = new Object;'
-			// In this case, there are no argument positions to check, so return early.
-			if node.Arguments() == nil {
+			if len(node.Arguments()) == 0 {
 				return []int{}, nil
 			}
 			thenableReturnIndices := []int{}
@@ -539,6 +631,9 @@ var NoMisusedPromisesRule = rule.Rule{
 				}
 				for _, signature := range signatures {
 					for index, parameter := range checker.Signature_parameters(signature) {
+						if index >= len(node.Arguments()) {
+							break
+						}
 						parameterDeclaration := parameter.ValueDeclaration
 						t := ctx.TypeChecker.GetTypeOfSymbolAtLocation(parameter, node.Expression())
 
@@ -901,7 +996,7 @@ var NoMisusedPromisesRule = rule.Rule{
 
 		listeners := rule.RuleListeners{
 			ast.KindBinaryExpression: func(node *ast.Node) {
-				if opts.ChecksConditionals && ast.IsLogicalOrCoalescingBinaryExpression(node) {
+				if checksConditionals && ast.IsLogicalOrCoalescingBinaryExpression(node) {
 					checkConditional(node, false)
 				}
 
@@ -910,7 +1005,7 @@ var NoMisusedPromisesRule = rule.Rule{
 				}
 			},
 		}
-		if opts.ChecksConditionals {
+		if checksConditionals {
 			listeners[ast.KindPropertyAccessExpression] = checkArrayPredicates
 			listeners[ast.KindElementAccessExpression] = checkArrayPredicates
 

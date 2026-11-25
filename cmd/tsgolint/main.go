@@ -82,6 +82,7 @@ import (
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_argument"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_assignment"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_call"
+	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_class_instance_assignment"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_enum_assignment"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_enum_comparison"
 	"github.com/typescript-eslint/tsgolint/internal/rules/no_unsafe_member_access"
@@ -301,6 +302,7 @@ var allRules = []rule.Rule{
 	no_unsafe_argument.NoUnsafeArgumentRule,
 	no_unsafe_assignment.NoUnsafeAssignmentRule,
 	no_unsafe_call.NoUnsafeCallRule,
+	no_unsafe_class_instance_assignment.NoUnsafeClassInstanceAssignmentRule,
 	no_unsafe_enum_assignment.NoUnsafeEnumAssignmentRule,
 	no_unsafe_enum_comparison.NoUnsafeEnumComparisonRule,
 	no_unsafe_member_access.NoUnsafeMemberAccessRule,
