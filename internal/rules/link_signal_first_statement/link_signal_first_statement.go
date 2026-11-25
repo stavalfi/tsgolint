@@ -63,10 +63,11 @@ func referencesOf(typeChecker *checker.Checker, body *ast.Node, declaration *ast
 	return references
 }
 
-// A top-level `const signal` / `let signal` in body that is not the linked one.
-func declaresSignalElsewhere(body *ast.Node, linked *utils.LinkSignalDeclaration) bool {
+// A top-level `const signal` / `let signal` in body that is neither the linked
+// one nor the alias being replaced.
+func declaresSignalElsewhere(body *ast.Node, linked *utils.LinkSignalDeclaration, alias *ast.Node) bool {
 	for _, statement := range body.AsBlock().Statements.Nodes {
-		if !ast.IsVariableStatement(statement) {
+		if !ast.IsVariableStatement(statement) || statement == alias {
 			continue
 		}
 		for _, declaration := range statement.AsVariableStatement().DeclarationList.AsVariableDeclarationList().Declarations.Nodes {
@@ -128,12 +129,18 @@ var LinkSignalFirstStatementRule = rule.Rule{
 						linked = nil
 					}
 				}
+				var alias *ast.Node
+				if linked == nil {
+					alias = utils.FindSignalAlias(ctx.TypeChecker, method)
+				}
 				reportNode := method.Name()
 				if linked != nil {
 					reportNode = linked.Statement
+				} else if alias != nil {
+					reportNode = alias
 				}
 				message := buildLinkSignalFirstMessage(caller.Text)
-				fixable := !declaresSignalElsewhere(body, linked)
+				fixable := !declaresSignalElsewhere(body, linked, alias)
 				if linked != nil {
 					declarations := linked.Statement.AsVariableStatement().DeclarationList.AsVariableDeclarationList().Declarations.Nodes
 					if len(declarations) != 1 || linked.Name() == "" {
@@ -149,13 +156,33 @@ var LinkSignalFirstStatementRule = rule.Rule{
 					if caller.Rename != nil {
 						fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, caller.Rename, "signal: "+utils.RenamedCallerSignal))
 					}
+					var removed *ast.Node
 					if linked != nil {
-						fixes = append(fixes, rule.RuleFixRemoveRange(statementRange(ctx.SourceFile, linked.Statement)))
+						removed = linked.Statement
 						if linked.Name() != "signal" {
 							for _, reference := range referencesOf(ctx.TypeChecker, body, linked.Declaration) {
-								target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, reference)
-								fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, target, text))
+								if target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, reference); target != nil {
+									fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, target, text))
+								}
 							}
+						}
+					} else if alias != nil {
+						removed = alias
+					}
+					if removed != nil {
+						fixes = append(fixes, rule.RuleFixRemoveRange(statementRange(ctx.SourceFile, removed)))
+					}
+					// Every raw read of the caller's signal becomes the linked `signal`
+					// in the same fix, so the new constant is used from the start.
+					for _, read := range utils.CallerSignalReads(ctx.TypeChecker, method) {
+						if removed != nil && read.Pos() >= removed.Pos() && read.End() <= removed.End() {
+							continue
+						}
+						if utils.ShadowsSignal(read, method) {
+							continue
+						}
+						if target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, read); target != nil {
+							fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, target, text))
 						}
 					}
 					openBrace := utils.TrimNodeTextRange(ctx.SourceFile, body).Pos() + 1
@@ -185,8 +212,17 @@ var LinkSignalFirstStatementRule = rule.Rule{
 					!(linked != nil && readsDeclaration(ctx.TypeChecker, expression, linked.Declaration)) {
 					return
 				}
+				// Until the first statement declares `signal`, there is nothing to
+				// unwrap to; the first-statement fix rewrites this call itself.
+				if !utils.StartsWithLinkedSignal(ctx.TypeChecker, method) || utils.ShadowsSignal(node, method) {
+					ctx.ReportNode(node, buildLinkSignalTwiceMessage())
+					return
+				}
 				ctx.ReportNodeWithFixes(node, buildLinkSignalTwiceMessage(), func() []rule.RuleFix {
 					target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, node)
+					if target == nil {
+						return nil
+					}
 					return []rule.RuleFix{rule.RuleFixReplace(ctx.SourceFile, target, text)}
 				})
 			},

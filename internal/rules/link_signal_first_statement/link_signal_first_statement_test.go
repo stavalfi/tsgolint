@@ -192,11 +192,58 @@ class A extends Base {
 class A extends Base {
   async #run(options: { signal: AbortSignal }): Promise<void> {
     const signal = super.linkSignal({ signal: options.signal });
-    await fetch("x", { signal: options.signal });
+    await fetch("x", { signal });
   }
 }`},
 			Errors: []rule_tester.InvalidTestCaseError{
 				{MessageId: "linkSignalFirst", Line: 10, Column: 9, EndLine: 10, EndColumn: 13},
+			},
+		},
+		// `const signal = options.signal` is the raw signal under the linked name: replaced in place.
+		{
+			Code: stub + `
+class A extends Base {
+  async run(options: { signal: AbortSignal }): Promise<void> {
+    const url = "x";
+    const signal = options.signal;
+    await fetch(url, { signal });
+  }
+}`,
+			Output: []string{stub + `
+class A extends Base {
+  async run(options: { signal: AbortSignal }): Promise<void> {
+    const signal = super.linkSignal({ signal: options.signal });
+    const url = "x";
+    await fetch(url, { signal });
+  }
+}`},
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "linkSignalFirst", Line: 12, Column: 5, EndLine: 12, EndColumn: 35},
+			},
+		},
+		// Raw reads inside nested arrows follow, unless a nested parameter named `signal` shadows them.
+		{
+			Code: stub + `
+declare function each(run: (options: { signal: AbortSignal }) => Promise<unknown>): Promise<void>;
+class A extends Base {
+  async run({ signal, url }: { signal: AbortSignal; url: string }): Promise<void> {
+    await each(() => fetch(url, { signal }));
+    await each(({ signal }) => fetch(url, { signal }));
+    await each(({ signal: inner }) => fetch(url, { signal: inner }));
+  }
+}`,
+			Output: []string{stub + `
+declare function each(run: (options: { signal: AbortSignal }) => Promise<unknown>): Promise<void>;
+class A extends Base {
+  async run({ signal: callerSignal, url }: { signal: AbortSignal; url: string }): Promise<void> {
+    const signal = super.linkSignal({ signal: callerSignal });
+    await each(() => fetch(url, { signal }));
+    await each(({ signal }) => fetch(url, { signal }));
+    await each(({ signal: inner }) => fetch(url, { signal: inner }));
+  }
+}`},
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "linkSignalFirst", Line: 11, Column: 9, EndLine: 11, EndColumn: 12},
 			},
 		},
 		// Another `signal` is declared in the body: reported, not fixed.

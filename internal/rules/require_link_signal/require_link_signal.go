@@ -79,12 +79,15 @@ var RequireLinkSignalRule = rule.Rule{
 			// (link-signal-first-statement): a read below it becomes `signal`,
 			// and until that statement exists there is nothing safe to rewrite to.
 			if utils.LinksSignalFirst(ctx.TypeChecker, method) != nil {
-				if !utils.StartsWithLinkedSignal(ctx.TypeChecker, method) {
+				if !utils.StartsWithLinkedSignal(ctx.TypeChecker, method) || utils.ShadowsSignal(node, method) {
 					ctx.ReportNode(node, message)
 					return
 				}
 				ctx.ReportNodeWithFixes(node, message, func() []rule.RuleFix {
 					target, replacement := utils.ReplaceWithLinkedSignal(ctx.SourceFile, node)
+					if target == nil {
+						return nil
+					}
 					return []rule.RuleFix{rule.RuleFixReplace(ctx.SourceFile, target, replacement)}
 				})
 				return

@@ -296,7 +296,216 @@ func ReplaceWithLinkedSignal(sourceFile *ast.SourceFile, node *ast.Node) (*ast.N
 		}
 	}
 	if parent != nil && parent.Kind == ast.KindShorthandPropertyAssignment && parent.Name() == node {
+		// `{ signal }` already reads whatever `signal` means here: nothing to write.
+		if node.Text() == "signal" {
+			return nil, ""
+		}
 		return parent, node.Text() + ": signal"
 	}
 	return node, "signal"
+}
+
+// Whether pattern (an identifier or binding pattern) binds name.
+func BindsName(pattern *ast.Node, name string) bool {
+	if pattern == nil {
+		return false
+	}
+	switch {
+	case ast.IsIdentifier(pattern):
+		return pattern.Text() == name
+	case ast.IsObjectBindingPattern(pattern) || ast.IsArrayBindingPattern(pattern):
+		for _, element := range pattern.AsBindingPattern().Elements.Nodes {
+			if ast.IsBindingElement(element) && BindsName(element.Name(), name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Whether a `signal` written at node would resolve to something declared
+// between node and method's own body: a nested function's parameter, or a
+// `const signal` of an inner block. The method body's own top-level
+// declarations do not count; the caller decides what to do with those.
+func ShadowsSignal(node *ast.Node, method *ast.Node) bool {
+	body := method.Body()
+	for current := node.Parent; current != nil && current != method; current = current.Parent {
+		if ast.IsFunctionLikeDeclaration(current) {
+			for _, parameter := range current.Parameters() {
+				if BindsName(parameter.Name(), "signal") {
+					return true
+				}
+			}
+			continue
+		}
+		if ast.IsBlock(current) && current != body {
+			for _, statement := range current.AsBlock().Statements.Nodes {
+				if !ast.IsVariableStatement(statement) {
+					continue
+				}
+				for _, declaration := range statement.AsVariableStatement().DeclarationList.AsVariableDeclarationList().Declarations.Nodes {
+					if BindsName(declaration.Name(), "signal") {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// `const signal = <caller signal>` at the top of method's body: the raw
+// parameter under the name the linked signal is about to take.
+func FindSignalAlias(typeChecker *checker.Checker, method *ast.Node) *ast.Node {
+	body := method.Body()
+	if body == nil || !ast.IsBlock(body) {
+		return nil
+	}
+	for _, statement := range body.AsBlock().Statements.Nodes {
+		if !ast.IsVariableStatement(statement) {
+			continue
+		}
+		declarations := statement.AsVariableStatement().DeclarationList.AsVariableDeclarationList().Declarations.Nodes
+		if len(declarations) != 1 {
+			continue
+		}
+		declaration := declarations[0]
+		name := declaration.Name()
+		initializer := declaration.Initializer()
+		if name == nil || !ast.IsIdentifier(name) || name.Text() != "signal" || initializer == nil {
+			continue
+		}
+		if ast.IsVarConst(declaration) && ReadsParameterOf(typeChecker, ast.SkipParentheses(initializer), method) {
+			return statement
+		}
+	}
+	return nil
+}
+
+// Every read of the caller's signal in method's body: references to the
+// destructured binding, or `options.signal` off an object parameter. A read
+// that is the argument of `super.linkSignal({ signal: <read> })` is returned
+// as that call instead, since the whole call is what gets replaced.
+func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []*ast.Node {
+	params := RealParameters(method.Parameters())
+	body := method.Body()
+	if len(params) == 0 || body == nil {
+		return nil
+	}
+	parameter := params[0]
+	name := parameter.Name()
+	if name == nil {
+		return nil
+	}
+	var bindingSymbol *ast.Symbol
+	var parameterSymbol *ast.Symbol
+	property := ""
+	switch {
+	case ast.IsIdentifier(name):
+		parameterSymbol = typeChecker.GetSymbolAtLocation(name)
+		parameterType := typeChecker.GetTypeAtLocation(parameter)
+		if parameterType == nil || IsIntrinsicErrorType(parameterType) {
+			return nil
+		}
+		if IsAbortSignalType(parameterType) {
+			bindingSymbol = parameterSymbol
+			parameterSymbol = nil
+		} else {
+		search:
+			for _, part := range UnionTypeParts(parameterType) {
+				for _, member := range checker.Checker_getPropertiesOfType(typeChecker, part) {
+					if IsSymbolFlagSet(member, ast.SymbolFlagsOptional) {
+						continue
+					}
+					if IsAbortSignalType(typeChecker.GetTypeOfSymbolAtLocation(member, parameter)) {
+						property = member.Name
+						break search
+					}
+				}
+			}
+			if property == "" {
+				return nil
+			}
+		}
+	case ast.IsObjectBindingPattern(name):
+		for _, element := range name.AsBindingPattern().Elements.Nodes {
+			if !ast.IsBindingElement(element) {
+				continue
+			}
+			bindingName := element.Name()
+			if bindingName != nil && ast.IsIdentifier(bindingName) && IsAbortSignalType(typeChecker.GetTypeAtLocation(bindingName)) {
+				bindingSymbol = typeChecker.GetSymbolAtLocation(bindingName)
+				break
+			}
+		}
+		if bindingSymbol == nil {
+			return nil
+		}
+	default:
+		return nil
+	}
+
+	reads := []*ast.Node{}
+	seen := map[*ast.Node]bool{}
+	add := func(read *ast.Node) {
+		// `{ signal: <read> }` handed to `super.linkSignal`: the call is the read.
+		if call := linkSignalCallOf(read); call != nil {
+			read = call
+		}
+		if !seen[read] {
+			seen[read] = true
+			reads = append(reads, read)
+		}
+	}
+	var walk func(node *ast.Node)
+	walk = func(node *ast.Node) {
+		node.ForEachChild(func(child *ast.Node) bool {
+			switch {
+			case bindingSymbol != nil && ast.IsIdentifier(child) && (isShorthandName(child) || !ast.IsDeclarationName(child)):
+				if ValueSymbolOf(typeChecker, child) == bindingSymbol {
+					add(child)
+				}
+			case parameterSymbol != nil && ast.IsPropertyAccessExpression(child):
+				access := child.AsPropertyAccessExpression()
+				if ast.IsIdentifier(access.Expression) && access.Name().Text() == property &&
+					typeChecker.GetSymbolAtLocation(access.Expression) == parameterSymbol {
+					add(child)
+					return false
+				}
+			}
+			walk(child)
+			return false
+		})
+	}
+	walk(body)
+	return reads
+}
+
+// The `super.linkSignal(...)` call whose `{ signal }` / `{ signal: x }`
+// argument read is, or nil.
+func linkSignalCallOf(read *ast.Node) *ast.Node {
+	property := read.Parent
+	if property == nil {
+		return nil
+	}
+	switch {
+	case property.Kind == ast.KindShorthandPropertyAssignment && property.Name() == read:
+	case property.Kind == ast.KindPropertyAssignment && property.Initializer() == read:
+	default:
+		return nil
+	}
+	object := property.Parent
+	if object == nil || object.Parent == nil || !IsSuperLinkSignalCall(object.Parent) {
+		return nil
+	}
+	if object.Parent.AsCallExpression().Arguments.Nodes[0] != object {
+		return nil
+	}
+	return object.Parent
+}
+
+// A shorthand `{ signal }` names a property, but reads a variable.
+func isShorthandName(node *ast.Node) bool {
+	parent := node.Parent
+	return parent != nil && parent.Kind == ast.KindShorthandPropertyAssignment && parent.Name() == node
 }
