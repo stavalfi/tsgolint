@@ -175,13 +175,17 @@ var LinkSignalFirstStatementRule = rule.Rule{
 					// Every raw read of the caller's signal becomes the linked `signal`
 					// in the same fix, so the new constant is used from the start.
 					for _, read := range utils.CallerSignalReads(ctx.TypeChecker, method) {
-						if removed != nil && read.Pos() >= removed.Pos() && read.End() <= removed.End() {
+						if removed != nil && read.Node.Pos() >= removed.Pos() && read.Node.End() <= removed.End() {
 							continue
 						}
-						if utils.ShadowsSignal(read, method) {
+						if utils.ShadowsSignal(read.Node, method) {
 							continue
 						}
-						if target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, read); target != nil {
+						if read.WholeParameter {
+							fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, read.Node, "{ ..."+read.Node.Text()+", signal }"))
+							continue
+						}
+						if target, text := utils.ReplaceWithLinkedSignal(ctx.SourceFile, read.Node); target != nil {
 							fixes = append(fixes, rule.RuleFixReplace(ctx.SourceFile, target, text))
 						}
 					}

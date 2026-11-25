@@ -88,6 +88,16 @@ Help: Start the body with `const signal = super.linkSignal({ signal: callerSigna
 ---
 
 [TestLinkSignalFirstStatement/invalid-8 - 1]
+Diagnostic 1: linkSignalFirst (10:9 - 10:11)
+Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
+Help: Start the body with `const signal = super.linkSignal({ signal: options.signal });` and use `signal` below it.
+   9 | class A extends Base {
+  10 |   async run(options: { signal: AbortSignal; url: string }): Promise<void> {
+     |         ~~~
+  11 |     await this.inner(options);
+---
+
+[TestLinkSignalFirstStatement/invalid-9 - 1]
 Diagnostic 1: linkSignalFirst (11:9 - 11:11)
 Message: An async method links the caller's signal once, as its first statement, so nothing below it can run after this instance was closed.
 Help: Start the body with `const signal = super.linkSignal({ signal: callerSignal });` and use `signal` below it.
@@ -97,7 +107,7 @@ Help: Start the body with `const signal = super.linkSignal({ signal: callerSigna
   12 |     const signal = make();
 ---
 
-[TestLinkSignalFirstStatement/invalid-9 - 1]
+[TestLinkSignalFirstStatement/invalid-10 - 1]
 Diagnostic 1: linkSignalTwice (12:32 - 12:73)
 Message: The caller's signal is linked by the first statement already; linking it again wraps it twice.
 Help: Use `signal` instead.

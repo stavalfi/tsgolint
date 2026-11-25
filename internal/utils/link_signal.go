@@ -382,11 +382,20 @@ func FindSignalAlias(typeChecker *checker.Checker, method *ast.Node) *ast.Node {
 	return nil
 }
 
+// SignalRead is one place method's body reads the caller's signal.
+type SignalRead struct {
+	Node *ast.Node
+	// The whole object parameter handed on as-is (`this.run(options)`), which
+	// carries the raw signal inside it.
+	WholeParameter bool
+}
+
 // Every read of the caller's signal in method's body: references to the
-// destructured binding, or `options.signal` off an object parameter. A read
-// that is the argument of `super.linkSignal({ signal: <read> })` is returned
-// as that call instead, since the whole call is what gets replaced.
-func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []*ast.Node {
+// destructured binding, `options.signal` off an object parameter, or that
+// object parameter forwarded whole. A read that is the argument of
+// `super.linkSignal({ signal: <read> })` is returned as that call instead,
+// since the whole call is what gets replaced.
+func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []SignalRead {
 	params := RealParameters(method.Parameters())
 	body := method.Body()
 	if len(params) == 0 || body == nil {
@@ -445,16 +454,16 @@ func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []*ast.No
 		return nil
 	}
 
-	reads := []*ast.Node{}
+	reads := []SignalRead{}
 	seen := map[*ast.Node]bool{}
-	add := func(read *ast.Node) {
+	add := func(read *ast.Node, whole bool) {
 		// `{ signal: <read> }` handed to `super.linkSignal`: the call is the read.
 		if call := linkSignalCallOf(read); call != nil {
 			read = call
 		}
 		if !seen[read] {
 			seen[read] = true
-			reads = append(reads, read)
+			reads = append(reads, SignalRead{Node: read, WholeParameter: whole})
 		}
 	}
 	var walk func(node *ast.Node)
@@ -463,14 +472,20 @@ func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []*ast.No
 			switch {
 			case bindingSymbol != nil && ast.IsIdentifier(child) && (isShorthandName(child) || !ast.IsDeclarationName(child)):
 				if ValueSymbolOf(typeChecker, child) == bindingSymbol {
-					add(child)
+					add(child, false)
 				}
 			case parameterSymbol != nil && ast.IsPropertyAccessExpression(child):
 				access := child.AsPropertyAccessExpression()
-				if ast.IsIdentifier(access.Expression) && access.Name().Text() == property &&
-					typeChecker.GetSymbolAtLocation(access.Expression) == parameterSymbol {
-					add(child)
+				if ast.IsIdentifier(access.Expression) && typeChecker.GetSymbolAtLocation(access.Expression) == parameterSymbol {
+					if access.Name().Text() == property {
+						add(child, false)
+					}
+					// Any other `options.x` is not a read of the signal.
 					return false
+				}
+			case parameterSymbol != nil && ast.IsIdentifier(child) && isForwardedArgument(child):
+				if typeChecker.GetSymbolAtLocation(child) == parameterSymbol {
+					add(child, true)
 				}
 			}
 			walk(child)
@@ -479,6 +494,20 @@ func CallerSignalReads(typeChecker *checker.Checker, method *ast.Node) []*ast.No
 	}
 	walk(body)
 	return reads
+}
+
+// Whether node is passed as a call argument as-is: `run(options)`.
+func isForwardedArgument(node *ast.Node) bool {
+	parent := node.Parent
+	if parent == nil || !ast.IsCallExpression(parent) {
+		return false
+	}
+	for _, argument := range parent.AsCallExpression().Arguments.Nodes {
+		if argument == node {
+			return true
+		}
+	}
+	return false
 }
 
 // The `super.linkSignal(...)` call whose `{ signal }` / `{ signal: x }`

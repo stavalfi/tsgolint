@@ -246,6 +246,37 @@ class A extends Base {
 				{MessageId: "linkSignalFirst", Line: 11, Column: 9, EndLine: 11, EndColumn: 12},
 			},
 		},
+		// An object parameter forwarded whole carries the raw signal: it is spread with the linked one.
+		{
+			Code: stub + `
+class A extends Base {
+  async run(options: { signal: AbortSignal; url: string }): Promise<void> {
+    await this.inner(options);
+    this.log(options.url);
+  }
+  async inner(options: { signal: AbortSignal; url: string }): Promise<void> {
+    const signal = super.linkSignal({ signal: options.signal });
+    await fetch(options.url, { signal });
+  }
+  log(url: string): void {}
+}`,
+			Output: []string{stub + `
+class A extends Base {
+  async run(options: { signal: AbortSignal; url: string }): Promise<void> {
+    const signal = super.linkSignal({ signal: options.signal });
+    await this.inner({ ...options, signal });
+    this.log(options.url);
+  }
+  async inner(options: { signal: AbortSignal; url: string }): Promise<void> {
+    const signal = super.linkSignal({ signal: options.signal });
+    await fetch(options.url, { signal });
+  }
+  log(url: string): void {}
+}`},
+			Errors: []rule_tester.InvalidTestCaseError{
+				{MessageId: "linkSignalFirst", Line: 10, Column: 9, EndLine: 10, EndColumn: 12},
+			},
+		},
 		// Another `signal` is declared in the body: reported, not fixed.
 		{
 			Code: stub + `
